@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Générateur de tableau ASCII</title>
+    <title>ASCII table manager</title>
     <style>
       body {
         font-family: "Courier New", Courier, monospace;
@@ -11,8 +11,10 @@
       input[type="number"],
       input[type="checkbox"],
       button,
+      select,
       textarea {
         font-family: "Courier New", Courier, monospace;
+        font-size: 14px;
       }
       input[type="number"] {
         width: 60px;
@@ -40,19 +42,46 @@
     </style>
   </head>
   <body>
+    <h1>ASCII table manager</h1>
+    <p>Créate/generate or copy-paste an existing ASCII table to edit it finger in the nose</p>
     <label>Lignes: <input type="number" id="rows" min="1" value="3" /></label>
     <label>Colonnes: <input type="number" id="cols" min="1" value="3" /></label>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
     <label
-      ><input type="checkbox" id="sepAll" checked /> Séparer chaque ligne</label
+      ><input type="checkbox" id="sepAll" checked /> Separate each line</label
     >
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <label
+      >Font:
+      <select id="fontSelect">
+        <option value="Consolas, monospace" selected>Consolas</option>
+        <option value="'Courier New', Courier, monospace">Courier New</option>
+        <option value="'Lucida Console', Monaco, monospace">
+          Lucida Console
+        </option>
+        <option value="Monaco, monospace">Monaco</option>
+        <option value="Menlo, monospace">Menlo</option>
+        <option value="'DejaVu Sans Mono', monospace">DejaVu Sans Mono</option>
+        <option value="'Source Code Pro', monospace">Source Code Pro</option>
+        <option value="'Fira Code', monospace">Fira Code</option>
+        <option value="'Roboto Mono', monospace">Roboto Mono</option>
+      </select>
+    </label>
 
     <div id="table-container"></div>
     <textarea id="ascii-output"></textarea>
 
     <script>
+      // Calcule la largeur d'affichage en monospace en tenant compte des emojis
+      const emojiRegex = /\p{Extended_Pictographic}/u;
+      function stringWidth(str) {
+        return [...str].reduce((w, ch) => w + (emojiRegex.test(ch) ? 2 : 1), 0);
+      }
+
       const rowsInput = document.getElementById("rows");
       const colsInput = document.getElementById("cols");
       const sepAllCheckbox = document.getElementById("sepAll");
+      const fontSelect = document.getElementById("fontSelect");
       const container = document.getElementById("table-container");
       const asciiOutput = document.getElementById("ascii-output");
 
@@ -60,12 +89,19 @@
       colsInput.addEventListener("input", generateTable);
       sepAllCheckbox.addEventListener("change", updateAscii);
       asciiOutput.addEventListener("input", importAscii);
+      fontSelect.addEventListener("change", () => {
+        asciiOutput.style.fontFamily = fontSelect.value;
+        container.style.fontFamily = fontSelect.value;
+        const tbl = container.querySelector("table");
+        if (tbl) tbl.style.fontFamily = fontSelect.value;
+      });
 
       function generateTable() {
         const rows = Math.max(1, parseInt(rowsInput.value) || 1);
         const cols = Math.max(1, parseInt(colsInput.value) || 1);
         container.innerHTML = "";
         const table = document.createElement("table");
+        table.style.fontFamily = fontSelect.value;
         for (let i = 0; i < rows; i++) {
           const tr = document.createElement("tr");
           for (let j = 0; j < cols; j++) {
@@ -77,6 +113,7 @@
           table.appendChild(tr);
         }
         container.appendChild(table);
+        asciiOutput.style.fontFamily = fontSelect.value;
         updateAscii();
       }
 
@@ -89,7 +126,8 @@
         const colWidths = data[0].map((_, ci) => {
           let max = 0;
           data.forEach((r) => {
-            if (r[ci].length > max) max = r[ci].length;
+            const w = stringWidth(r[ci]);
+            if (w > max) max = w;
           });
           return max + 2;
         });
@@ -98,10 +136,10 @@
         const makeRow = (row) =>
           "|" +
           row
-            .map(
-              (cell, j) =>
-                " " + cell + " ".repeat(colWidths[j] - cell.length - 1)
-            )
+            .map((cell, j) => {
+              const cellW = stringWidth(cell);
+              return " " + cell + " ".repeat(colWidths[j] - cellW - 1);
+            })
             .join("|") +
           "|\n";
 
@@ -128,15 +166,10 @@
         const text = asciiOutput.value.trim();
         const lines = text.split("\n").filter((l) => l);
         if (!lines.length) return;
-        // Identify border and row lines
         const borderLines = lines.filter((l) => /^\+[\-+]+\+$/.test(l));
         const rowLines = lines.filter((l) => /^\|.*\|$/.test(l));
         if (!borderLines.length || !rowLines.length) return;
-        // Determine column widths from first border
-        const firstBorder = borderLines[0];
-        const segs = firstBorder.slice(1, -1).split("+");
-        const cols = segs.length;
-        // Parse cells
+        const cols = borderLines[0].slice(1, -1).split("+").length;
         const data = rowLines.map((l) =>
           l
             .slice(1, -1)
@@ -144,20 +177,15 @@
             .map((cell) => cell.trim())
         );
         const rows = data.length;
-        // Determine sepAll
-        const sepAll = borderLines.length > 3;
-        // Update inputs and table
         rowsInput.value = rows;
         colsInput.value = cols;
-        sepAllCheckbox.checked = sepAll;
-        // Build table and fill
+        sepAllCheckbox.checked = borderLines.length > rows + 1;
         generateTable();
         const table = container.querySelector("table");
         data.forEach((row, i) =>
           row.forEach((cell, j) => {
-            if (table.rows[i] && table.rows[i].cells[j]) {
+            if (table.rows[i] && table.rows[i].cells[j])
               table.rows[i].cells[j].textContent = cell;
-            }
           })
         );
         updateAscii();

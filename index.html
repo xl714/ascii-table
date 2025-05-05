@@ -39,6 +39,15 @@
         margin-top: 20px;
         white-space: pre;
       }
+      .ctrl-btn {
+        width: 20px;
+        height: 20px;
+        margin: 0 2px;
+        padding: 0;
+      }
+      .control-row td, .control-cell {
+        text-align: center;
+      }
     </style>
   </head>
   <body>
@@ -49,9 +58,7 @@
     <label>Lines: <input type="number" id="rows" min="1" value="3" /></label>
     <label>Columns: <input type="number" id="cols" min="1" value="3" /></label>
     &nbsp;&nbsp;&nbsp;
-    <label
-      ><input type="checkbox" id="sepAll" checked /> Separate each line</label
-    >
+    <label><input type="checkbox" id="sepAll" checked /> Separate each line</label>
     &nbsp;&nbsp;&nbsp;
     <label><input type="checkbox" id="jsonMode" /> JSON</label>
     &nbsp;&nbsp;&nbsp;
@@ -60,9 +67,7 @@
       <select id="fontSelect">
         <option value="Consolas, monospace" selected>Consolas</option>
         <option value="'Courier New', Courier, monospace">Courier New</option>
-        <option value="'Lucida Console', Monaco, monospace">
-          Lucida Console
-        </option>
+        <option value="'Lucida Console', Monaco, monospace">Lucida Console</option>
         <option value="Monaco, monospace">Monaco</option>
         <option value="Menlo, monospace">Menlo</option>
         <option value="'DejaVu Sans Mono', monospace">DejaVu Sans Mono</option>
@@ -73,10 +78,7 @@
     </label>
 
     <div id="table-container"></div>
-    <textarea
-      id="ascii-output"
-      placeholder="Le tableau ASCII apparaît ici..."
-    ></textarea>
+    <textarea id="ascii-output" placeholder="Le tableau ASCII apparaît ici..."></textarea>
     <textarea id="json-output" placeholder="JSON export/import..."></textarea>
 
     <script>
@@ -101,9 +103,7 @@
       asciiOutput.addEventListener("input", importAscii);
       jsonOutput.addEventListener("input", importJSON);
       fontSelect.addEventListener("change", () => {
-        container
-          .querySelectorAll("table, textarea")
-          .forEach((el) => (el.style.fontFamily = fontSelect.value));
+        container.querySelectorAll("table, textarea").forEach(el => el.style.fontFamily = fontSelect.value);
         updateAscii();
       });
 
@@ -111,16 +111,59 @@
         const oldTable = container.querySelector("table");
         let oldData = [];
         if (oldTable)
-          oldData = Array.from(oldTable.rows).map((tr) =>
-            Array.from(tr.cells).map((td) => td.textContent.trim())
-          );
+          oldData = Array.from(oldTable.rows)
+            .filter((tr, i) => !tr.classList.contains('control-row'))
+            .map(tr => Array.from(tr.cells).slice(1).map(td => td.textContent.trim()));
+
         const rows = Math.max(1, parseInt(rowsInput.value) || 1);
         const cols = Math.max(1, parseInt(colsInput.value) || 1);
         container.innerHTML = "";
         const table = document.createElement("table");
         table.style.fontFamily = fontSelect.value;
+
+        // Control row for column buttons
+        const ctrlRow = document.createElement("tr");
+        ctrlRow.classList.add('control-row');
+        // empty corner cell
+        const corner = document.createElement("td");
+        ctrlRow.appendChild(corner);
+        for (let j = 0; j < cols; j++) {
+          const cell = document.createElement("td");
+          cell.classList.add('control-cell');
+          const addBtn = document.createElement("button");
+          addBtn.textContent = "+";
+          addBtn.title = "Add column to the left";
+          addBtn.classList.add('ctrl-btn');
+          addBtn.addEventListener("click", () => addColumn(j));
+          const delBtn = document.createElement("button");
+          delBtn.textContent = "-";
+          delBtn.title = "Delete this column";
+          delBtn.classList.add('ctrl-btn');
+          delBtn.addEventListener("click", () => removeColumn(j));
+          cell.append(addBtn, delBtn);
+          ctrlRow.appendChild(cell);
+        }
+        table.appendChild(ctrlRow);
+
+        // Data rows with row buttons
         for (let i = 0; i < rows; i++) {
           const tr = document.createElement("tr");
+          // Row control cell
+          const ctrlCell = document.createElement("td");
+          ctrlCell.classList.add('control-cell');
+          const addR = document.createElement("button");
+          addR.textContent = "+";
+          addR.title = "Add row above";
+          addR.classList.add('ctrl-btn');
+          addR.addEventListener("click", () => addRow(i));
+          const delR = document.createElement("button");
+          delR.textContent = "-";
+          delR.title = "Delete this row";
+          delR.classList.add('ctrl-btn');
+          delR.addEventListener("click", () => removeRow(i));
+          ctrlCell.append(addR, delR);
+          tr.appendChild(ctrlCell);
+
           for (let j = 0; j < cols; j++) {
             const td = document.createElement("td");
             td.contentEditable = true;
@@ -138,34 +181,26 @@
       function getData() {
         const table = container.querySelector("table");
         if (!table) return [];
-        return Array.from(table.rows).map((tr) =>
-          Array.from(tr.cells).map((td) => td.textContent.trim())
-        );
+        return Array.from(table.rows)
+          .filter(tr => !tr.classList.contains('control-row'))
+          .map(tr => Array.from(tr.cells).slice(1).map(td => td.textContent.trim()));
       }
 
       function updateAscii() {
         const data = getData();
         if (!data.length) return;
-        const colWidths = data[0].map(
-          (_, ci) => Math.max(...data.map((r) => stringWidth(r[ci]))) + 2
-        );
-        const border = () =>
-          "+" + colWidths.map((w) => "-".repeat(w)).join("+") + "+\n";
-        const rowLine = (row) =>
-          "|" +
-          row
-            .map((cell, j) => {
-              const w = stringWidth(cell);
-              return " " + cell + " ".repeat(colWidths[j] - w - 1);
-            })
-            .join("|") +
-          "|\n";
+        const colWidths = data[0].map((_, ci) => Math.max(...data.map(r => stringWidth(r[ci]))) + 2);
+        const border = () => "+" + colWidths.map(w => "-".repeat(w)).join("+") + "+\n";
+        const rowLine = row => "|" + row.map((cell, j) => {
+          const w = stringWidth(cell);
+          return " " + cell + " ".repeat(colWidths[j] - w - 1);
+        }).join("|") + "|\n";
 
         let ascii = border() + rowLine(data[0]) + border();
-        if (sepAllCheckbox.checked)
-          data.slice(1).forEach((r) => (ascii += rowLine(r) + border()));
-        else {
-          data.slice(1).forEach((r) => (ascii += rowLine(r)));
+        if (sepAllCheckbox.checked) {
+          data.slice(1).forEach(r => ascii += rowLine(r) + border());
+        } else {
+          data.slice(1).forEach(r => ascii += rowLine(r));
           ascii += border();
         }
         asciiOutput.value = ascii;
@@ -175,11 +210,8 @@
       function updateJSON(data) {
         if (jsonModeCheckbox.checked && data.length > 1) {
           const headers = data[0];
-          const objects = data
-            .slice(1)
-            .map((row) =>
-              headers.reduce((o, k, i) => ((o[k] = row[i]), o), {})
-            );
+          const objects = data.slice(1).map(row =>
+            headers.reduce((o, k, i) => ((o[k] = row[i]), o), {}));
           jsonOutput.value = JSON.stringify(objects, null, 2);
         } else {
           jsonOutput.value = JSON.stringify(data, null, 2);
@@ -188,24 +220,18 @@
 
       function importAscii() {
         const txt = asciiOutput.value.trim();
-        const lines = txt.split("\n").filter((l) => l);
+        const lines = txt.split("\n").filter(l => l);
         if (!lines.length) return;
-        const rowLines = lines.filter((l) => /^\|.*\|$/.test(l));
-        const data = rowLines.map((l) =>
-          l
-            .slice(1, -1)
-            .split("|")
-            .map((c) => c.trim())
+        const rowLines = lines.filter(l => /^\|.*\|$/.test(l));
+        const data = rowLines.map(l =>
+          l.slice(1, -1).split("|").map(c => c.trim())
         );
         rowsInput.value = data.length;
         colsInput.value = data[0].length;
-        sepAllCheckbox.checked =
-          lines.filter((l) => /^\+[\-+]+\+$/.test(l)).length > data.length + 1;
+        sepAllCheckbox.checked = lines.filter(l => /^\+[\-+]+\+$/.test(l)).length > data.length + 1;
         generateTable();
         const tbl = container.querySelector("table");
-        data.forEach((r, i) =>
-          r.forEach((c, j) => (tbl.rows[i].cells[j].textContent = c))
-        );
+        data.forEach((r, i) => r.forEach((c, j) => tbl.rows[i+1].cells[j+1].textContent = c));
         updateAscii();
       }
 
@@ -213,32 +239,103 @@
         try {
           const parsed = JSON.parse(jsonOutput.value);
           let data = [];
-          if (Array.isArray(parsed) && parsed.every((r) => Array.isArray(r))) {
+          if (Array.isArray(parsed) && parsed.every(r => Array.isArray(r))) {
             data = parsed;
-          } else if (
-            Array.isArray(parsed) &&
-            parsed.every((o) => o && typeof o === "object" && !Array.isArray(o))
-          ) {
-            const headers = Array.from(
-              new Set(parsed.flatMap((o) => Object.keys(o)))
-            );
-            data = [headers].concat(
-              parsed.map((o) => headers.map((h) => o[h] || ""))
-            );
+          } else if (Array.isArray(parsed) && parsed.every(o => o && typeof o === "object")) {
+            const headers = Array.from(new Set(parsed.flatMap(o => Object.keys(o))));
+            data = [headers].concat(parsed.map(o => headers.map(h => o[h] || "")));
           } else return;
           rowsInput.value = data.length;
           colsInput.value = data[0].length;
           generateTable();
           const tbl = container.querySelector("table");
-          data.forEach((r, i) =>
-            r.forEach((c, j) => (tbl.rows[i].cells[j].textContent = c))
-          );
+          data.forEach((r, i) => r.forEach((c, j) => tbl.rows[i+1].cells[j+1].textContent = c));
           updateAscii();
         } catch (e) {
-          // JSON invalide, rien
+          // JSON invalide
         }
       }
 
+      // Row/Column manipulation functions
+      function addColumn(index) {
+        const table = container.querySelector("table");
+        if (!table) return;
+        const dataRows = Array.from(table.rows).filter(r => !r.classList.contains('control-row'));
+        dataRows.forEach(tr => {
+          const td = document.createElement('td');
+          td.contentEditable = true;
+          td.addEventListener('input', updateAscii);
+          tr.insertBefore(td, tr.cells[index+1]);
+        });
+        // Update controls row
+        const ctrlRow = table.querySelector('.control-row');
+        const cell = document.createElement('td');
+        cell.classList.add('control-cell');
+        const addBtn = document.createElement("button");
+        addBtn.textContent = "+";
+        addBtn.classList.add('ctrl-btn');
+        addBtn.addEventListener("click", () => addColumn(index));
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "-";
+        delBtn.classList.add('ctrl-btn');
+        delBtn.addEventListener("click", () => removeColumn(index));
+        cell.append(addBtn, delBtn);
+        ctrlRow.insertBefore(cell, ctrlRow.cells[index+1]);
+        colsInput.value = parseInt(colsInput.value) + 1;
+        updateAscii();
+      }
+
+      function removeColumn(index) {
+        const table = container.querySelector("table");
+        if (!table) return;
+        const cols = parseInt(colsInput.value);
+        if (cols < 2) return; // at least one column
+        Array.from(table.rows).forEach(tr => {
+          tr.removeChild(tr.cells[index+1]);
+        });
+        colsInput.value = cols - 1;
+        updateAscii();
+      }
+
+      function addRow(index) {
+        const table = container.querySelector("table");
+        if (!table) return;
+        const cols = parseInt(colsInput.value);
+        const tr = document.createElement('tr');
+        const ctrlCell = document.createElement('td');
+        ctrlCell.classList.add('control-cell');
+        const addBtn = document.createElement("button");
+        addBtn.textContent = "+";
+        addBtn.classList.add('ctrl-btn');
+        addBtn.addEventListener("click", () => addRow(index));
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "-";
+        delBtn.classList.add('ctrl-btn');
+        delBtn.addEventListener("click", () => removeRow(index));
+        ctrlCell.append(addBtn, delBtn);
+        tr.appendChild(ctrlCell);
+        for (let j = 0; j < cols; j++) {
+          const td = document.createElement('td');
+          td.contentEditable = true;
+          td.addEventListener('input', updateAscii);
+          tr.appendChild(td);
+        }
+        table.insertBefore(tr, table.rows[index+1]);
+        rowsInput.value = parseInt(rowsInput.value) + 1;
+        updateAscii();
+      }
+
+      function removeRow(index) {
+        const table = container.querySelector("table");
+        if (!table) return;
+        const rows = parseInt(rowsInput.value);
+        if (rows < 2) return; // at least one row
+        table.deleteRow(index+1);
+        rowsInput.value = rows - 1;
+        updateAscii();
+      }
+
+      // Initial render
       generateTable();
     </script>
   </body>

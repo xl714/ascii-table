@@ -45,7 +45,8 @@
         margin: 0 2px;
         padding: 0;
       }
-      .control-row td, .control-cell {
+      .control-row td,
+      .control-cell {
         text-align: center;
       }
     </style>
@@ -58,7 +59,9 @@
     <label>Lines: <input type="number" id="rows" min="1" value="3" /></label>
     <label>Columns: <input type="number" id="cols" min="1" value="3" /></label>
     &nbsp;&nbsp;&nbsp;
-    <label><input type="checkbox" id="sepAll" checked /> Separate each line</label>
+    <label
+      ><input type="checkbox" id="sepAll" checked /> Separate each line</label
+    >
     &nbsp;&nbsp;&nbsp;
     <label><input type="checkbox" id="jsonMode" /> JSON</label>
     &nbsp;&nbsp;&nbsp;
@@ -67,7 +70,9 @@
       <select id="fontSelect">
         <option value="Consolas, monospace" selected>Consolas</option>
         <option value="'Courier New', Courier, monospace">Courier New</option>
-        <option value="'Lucida Console', Monaco, monospace">Lucida Console</option>
+        <option value="'Lucida Console', Monaco, monospace">
+          Lucida Console
+        </option>
         <option value="Monaco, monospace">Monaco</option>
         <option value="Menlo, monospace">Menlo</option>
         <option value="'DejaVu Sans Mono', monospace">DejaVu Sans Mono</option>
@@ -76,14 +81,22 @@
         <option value="'Roboto Mono', monospace">Roboto Mono</option>
       </select>
     </label>
+  </label> 
+  &nbsp;&nbsp;&nbsp; 
+  <button id="testDataBtn">Load Test Data</button>
 
     <div id="table-container"></div>
-    <textarea id="ascii-output" placeholder="Le tableau ASCII apparaît ici..."></textarea>
+    <textarea
+      id="ascii-output"
+      placeholder="Le tableau ASCII apparaît ici..."
+    ></textarea>
     <textarea id="json-output" placeholder="JSON export/import..."></textarea>
 
     <script>
       const emojiRegex = /\p{Extended_Pictographic}/u;
       function stringWidth(str) {
+        // Simple width calculation (adjust if needed for specific fonts/environments)
+        // This approximation treats emojis as width 2, others as width 1.
         return [...str].reduce((w, ch) => w + (emojiRegex.test(ch) ? 2 : 1), 0);
       }
 
@@ -95,143 +108,323 @@
       const container = document.getElementById("table-container");
       const asciiOutput = document.getElementById("ascii-output");
       const jsonOutput = document.getElementById("json-output");
+      const testDataBtn = document.getElementById("testDataBtn");
 
+      // --- Event Listeners Setup ---
       rowsInput.addEventListener("input", generateTable);
       colsInput.addEventListener("input", generateTable);
       sepAllCheckbox.addEventListener("change", updateAscii);
       jsonModeCheckbox.addEventListener("change", () => updateJSON(getData()));
       asciiOutput.addEventListener("input", importAscii);
       jsonOutput.addEventListener("input", importJSON);
+      testDataBtn.addEventListener('click', loadTestData);
       fontSelect.addEventListener("change", () => {
-        container.querySelectorAll("table, textarea").forEach(el => el.style.fontFamily = fontSelect.value);
-        updateAscii();
+        const font = fontSelect.value;
+        container
+          .querySelectorAll("table")
+          .forEach((el) => (el.style.fontFamily = font));
+        // Also apply to textareas if desired
+        asciiOutput.style.fontFamily = font;
+        jsonOutput.style.fontFamily = font;
+        updateAscii(); // Recalculate widths based on font potentially changing character sizes
       });
 
-      function generateTable() {
-        const oldTable = container.querySelector("table");
-        let oldData = [];
-        if (oldTable)
-          oldData = Array.from(oldTable.rows)
-            .filter((tr, i) => !tr.classList.contains('control-row'))
-            .map(tr => Array.from(tr.cells).slice(1).map(td => td.textContent.trim()));
+      function loadTestData() {
+        const testData = [
+          ['A', 'B', 'C', 'D'], // Headers
+          ['1A', '1B', '1C', '1D'],
+          ['2A', '2B', '2C', '2D'],
+          ['3A', '3B', '3C', '3D']
+        ];
 
+        const numRows = testData.length;
+        const numCols = testData[0].length;
+
+        // 1. Update input fields to match test data dimensions
+        rowsInput.value = numRows;
+        colsInput.value = numCols;
+
+        // 2. Regenerate the table structure with the correct dimensions
+        generateTable(); 
+
+        // 3. Populate the newly generated table with test data
+        const table = container.querySelector("table");
+        if (!table) return; // Safety check
+
+        const dataRows = Array.from(table.rows).slice(1); // Get only data rows (skip control row)
+
+        testData.forEach((rowData, rowIndex) => {
+          if (dataRows[rowIndex]) { // Check if the target row exists in the DOM
+            const dataCells = Array.from(dataRows[rowIndex].cells).slice(1); // Get data cells (skip control cell)
+            rowData.forEach((cellData, colIndex) => {
+              if (dataCells[colIndex]) { // Check if the target cell exists
+                dataCells[colIndex].textContent = cellData;
+              }
+            });
+          }
+        });
+
+        // 4. Update the ASCII and JSON outputs
+        updateAscii();
+      }
+
+      // *** Use Event Delegation for Add/Remove Buttons ***
+      container.addEventListener("click", handleTableButtonClick);
+
+      function handleTableButtonClick(event) {
+        const target = event.target;
+        if (
+          target.tagName !== "BUTTON" ||
+          !target.classList.contains("ctrl-btn")
+        ) {
+          return; // Click wasn't on a control button
+        }
+
+        const cell = target.closest("td");
+        const row = target.closest("tr");
+        if (!cell || !row) return; // Should not happen if HTML is correct
+
+        const table = row.closest("table");
+        if (!table) return;
+
+        const colIndex = cell.cellIndex; // Index within the row (includes control cell)
+        const rowIndex = row.rowIndex; // Index within the table (includes control row)
+
+        if (row.classList.contains("control-row")) {
+          // --- Column Operation ---
+          // colIndex corresponds to the visual column, data column index is colIndex - 1
+          const dataColIndex = colIndex - 1;
+          if (dataColIndex < 0) return; // Click on the corner cell
+
+          if (target.textContent === "+") {
+            addColumn(dataColIndex);
+          } else if (target.textContent === "-") {
+            removeColumn(dataColIndex);
+          }
+        } else {
+          // --- Row Operation ---
+          // rowIndex corresponds to the visual row, data row index is rowIndex - 1
+          const dataRowIndex = rowIndex - 1;
+          if (colIndex !== 0) return; // Click wasn't in the row control cell
+
+          if (target.textContent === "+") {
+            addRow(dataRowIndex); // Add *above* the clicked row's original index
+          } else if (target.textContent === "-") {
+            removeRow(dataRowIndex);
+          }
+        }
+      }
+      // --- Core Table Generation and Data Functions ---
+
+      function generateTable() {
+        const oldData = getData(true); // Get data from existing table if present
         const rows = Math.max(1, parseInt(rowsInput.value) || 1);
         const cols = Math.max(1, parseInt(colsInput.value) || 1);
-        container.innerHTML = "";
+
+        container.innerHTML = ""; // Clear previous table
         const table = document.createElement("table");
         table.style.fontFamily = fontSelect.value;
 
         // Control row for column buttons
-        const ctrlRow = document.createElement("tr");
-        ctrlRow.classList.add('control-row');
-        // empty corner cell
-        const corner = document.createElement("td");
-        ctrlRow.appendChild(corner);
+        const ctrlRow = table.insertRow();
+        ctrlRow.classList.add("control-row");
+        ctrlRow.insertCell(); // Empty corner cell
+
         for (let j = 0; j < cols; j++) {
-          const cell = document.createElement("td");
-          cell.classList.add('control-cell');
-          const addBtn = document.createElement("button");
-          addBtn.textContent = "+";
-          addBtn.title = "Add column to the left";
-          addBtn.classList.add('ctrl-btn');
-          addBtn.addEventListener("click", () => addColumn(j));
-          const delBtn = document.createElement("button");
-          delBtn.textContent = "-";
-          delBtn.title = "Delete this column";
-          delBtn.classList.add('ctrl-btn');
-          delBtn.addEventListener("click", () => removeColumn(j));
-          cell.append(addBtn, delBtn);
-          ctrlRow.appendChild(cell);
+          const cell = ctrlRow.insertCell();
+          cell.classList.add("control-cell");
+          // Buttons are added but listeners are handled by delegation
+          cell.innerHTML = `
+            <button class="ctrl-btn" title="Add column to the left">+</button>
+            <button class="ctrl-btn" title="Delete this column">-</button>
+          `;
         }
-        table.appendChild(ctrlRow);
 
         // Data rows with row buttons
         for (let i = 0; i < rows; i++) {
-          const tr = document.createElement("tr");
-          // Row control cell
-          const ctrlCell = document.createElement("td");
-          ctrlCell.classList.add('control-cell');
-          const addR = document.createElement("button");
-          addR.textContent = "+";
-          addR.title = "Add row above";
-          addR.classList.add('ctrl-btn');
-          addR.addEventListener("click", () => addRow(i));
-          const delR = document.createElement("button");
-          delR.textContent = "-";
-          delR.title = "Delete this row";
-          delR.classList.add('ctrl-btn');
-          delR.addEventListener("click", () => removeRow(i));
-          ctrlCell.append(addR, delR);
-          tr.appendChild(ctrlCell);
+          const tr = table.insertRow();
+          const ctrlCell = tr.insertCell(); // Row control cell
+          ctrlCell.classList.add("control-cell");
+          // Buttons are added but listeners are handled by delegation
+          ctrlCell.innerHTML = `
+            <button class="ctrl-btn" title="Add row above">+</button>
+            <button class="ctrl-btn" title="Delete this row">-</button>
+          `;
 
           for (let j = 0; j < cols; j++) {
-            const td = document.createElement("td");
+            const td = tr.insertCell();
             td.contentEditable = true;
-            td.addEventListener("input", updateAscii);
-            if (oldData[i] && oldData[i][j] !== undefined)
+            td.addEventListener("input", updateAscii); // Update ASCII on cell edit
+            // Restore old data if dimensions allow
+            if (oldData[i] && oldData[i][j] !== undefined) {
               td.textContent = oldData[i][j];
-            tr.appendChild(td);
+            }
           }
-          table.appendChild(tr);
         }
         container.appendChild(table);
-        updateAscii();
+        updateAscii(); // Initial ASCII generation
       }
 
-      function getData() {
+      function getData(ignoreEmpty = false) {
         const table = container.querySelector("table");
         if (!table) return [];
-        return Array.from(table.rows)
-          .filter(tr => !tr.classList.contains('control-row'))
-          .map(tr => Array.from(tr.cells).slice(1).map(td => td.textContent.trim()));
+
+        const data = [];
+        // Skip first row (control row) using slice(1)
+        const dataRows = Array.from(table.rows).slice(1);
+
+        for (const tr of dataRows) {
+          const rowData = [];
+          // Skip first cell (control cell) using slice(1)
+          const dataCells = Array.from(tr.cells).slice(1);
+          for (const td of dataCells) {
+            rowData.push(td.textContent); // Keep trim? maybe not, allow spaces. Let user decide.
+            // rowData.push(td.textContent.trim()); // Original behaviour
+          }
+          // Only add row if it's not completely empty or if ignoreEmpty is false
+          if (ignoreEmpty || rowData.some((cell) => cell !== "")) {
+            data.push(rowData);
+          }
+        }
+        return data;
       }
 
       function updateAscii() {
         const data = getData();
-        if (!data.length) return;
-        const colWidths = data[0].map((_, ci) => Math.max(...data.map(r => stringWidth(r[ci]))) + 2);
-        const border = () => "+" + colWidths.map(w => "-".repeat(w)).join("+") + "+\n";
-        const rowLine = row => "|" + row.map((cell, j) => {
-          const w = stringWidth(cell);
-          return " " + cell + " ".repeat(colWidths[j] - w - 1);
-        }).join("|") + "|\n";
-
-        let ascii = border() + rowLine(data[0]) + border();
-        if (sepAllCheckbox.checked) {
-          data.slice(1).forEach(r => ascii += rowLine(r) + border());
-        } else {
-          data.slice(1).forEach(r => ascii += rowLine(r));
-          ascii += border();
+        if (!data.length || !data[0].length) {
+          asciiOutput.value = "";
+          jsonOutput.value = "";
+          return;
         }
+
+        // Calculate column widths based on the maximum width content in each column
+        const colWidths = data[0].map((_, colIndex) => {
+          let maxWidth = 0;
+          for (let rowIndex = 0; rowIndex < data.length; rowIndex++) {
+            const cellContent = data[rowIndex][colIndex] || "";
+            maxWidth = Math.max(maxWidth, stringWidth(cellContent));
+          }
+          return maxWidth + 2; // Add 2 for padding (space before/after)
+        });
+
+        const border =
+          "+" + colWidths.map((w) => "-".repeat(w)).join("+") + "+\n";
+
+        const rowLine = (row) =>
+          "|" +
+          row
+            .map((cell, j) => {
+              const content = cell || ""; // Handle undefined/null cells
+              const w = stringWidth(content);
+              const totalPadding = colWidths[j] - w;
+              const paddingLeft = Math.floor(totalPadding / 2);
+              const paddingRight = Math.ceil(totalPadding / 2);
+              // Centered: return " ".repeat(paddingLeft) + content + " ".repeat(paddingRight);
+              // Left-aligned (original):
+              return " " + content + " ".repeat(colWidths[j] - w - 1);
+            })
+            .join("|") +
+          "|\n";
+
+        let ascii = border;
+        if (data.length > 0) {
+          ascii += rowLine(data[0]); // First row
+          if (sepAllCheckbox.checked || data.length === 1) {
+            ascii += border; // Separator after first row if checked or only one row
+          }
+          // Remaining rows
+          for (let i = 1; i < data.length; i++) {
+            ascii += rowLine(data[i]);
+            if (sepAllCheckbox.checked || i === data.length - 1) {
+              ascii += border; // Separator after each row if checked, or after last row
+            }
+          }
+        }
+
         asciiOutput.value = ascii;
-        updateJSON(data);
+        updateJSON(data); // Update JSON representation as well
       }
 
       function updateJSON(data) {
+        if (!data || data.length === 0) {
+          jsonOutput.value = "[]";
+          return;
+        }
+        let jsonData = data; // Default: array of arrays
+
+        // If JSON mode is checked and there's a header row + data rows
         if (jsonModeCheckbox.checked && data.length > 1) {
           const headers = data[0];
-          const objects = data.slice(1).map(row =>
-            headers.reduce((o, k, i) => ((o[k] = row[i]), o), {}));
-          jsonOutput.value = JSON.stringify(objects, null, 2);
-        } else {
-          jsonOutput.value = JSON.stringify(data, null, 2);
+          // Ensure headers are unique-ish for valid JSON keys, simple approach:
+          const uniqueHeaders = headers.map((h, i) => h || `column_${i + 1}`);
+          const objects = data.slice(1).map((row) =>
+            uniqueHeaders.reduce((obj, key, index) => {
+              obj[key] = row[index] || ""; // Use empty string for missing values
+              return obj;
+            }, {})
+          );
+          jsonData = objects;
         }
+        jsonOutput.value = JSON.stringify(jsonData, null, 2);
       }
 
       function importAscii() {
         const txt = asciiOutput.value.trim();
-        const lines = txt.split("\n").filter(l => l);
+        const lines = txt
+          .split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l); // Trim each line too
         if (!lines.length) return;
-        const rowLines = lines.filter(l => /^\|.*\|$/.test(l));
-        const data = rowLines.map(l =>
-          l.slice(1, -1).split("|").map(c => c.trim())
+
+        // Filter lines that look like table rows (|...|)
+        const rowLines = lines.filter(
+          (l) => l.startsWith("|") && l.endsWith("|")
         );
+        if (!rowLines.length) return; // No valid data rows found
+
+        const data = rowLines.map(
+          (l) =>
+            l
+              .slice(1, -1)
+              .split("|")
+              .map((c) => c.trim()) // Trim cell content
+        );
+
+        if (!data.length || !data[0].length) return; // Empty data
+
+        // Basic check for separator consistency
+        const borderLines = lines.filter(
+          (l) => l.startsWith("+") && l.endsWith("+") && /^\+[\-+]+\+$/.test(l)
+        );
+        // Infer sepAll: more border lines than rows+1 suggests separators between all rows
+        sepAllCheckbox.checked = borderLines.length > data.length + 1;
+
         rowsInput.value = data.length;
         colsInput.value = data[0].length;
-        sepAllCheckbox.checked = lines.filter(l => /^\+[\-+]+\+$/.test(l)).length > data.length + 1;
+
+        // Regenerate table structure based on imported dimensions
         generateTable();
-        const tbl = container.querySelector("table");
-        data.forEach((r, i) => r.forEach((c, j) => tbl.rows[i+1].cells[j+1].textContent = c));
+
+        // Populate the newly generated table with imported data
+        const table = container.querySelector("table");
+        if (!table) return; // Should exist after generateTable()
+
+        const dataRows = Array.from(table.rows).slice(1); // Skip control row
+
+        data.forEach((rowData, i) => {
+          if (dataRows[i]) {
+            // Check if row exists in generated table
+            const cells = Array.from(dataRows[i].cells).slice(1); // Skip control cell
+            rowData.forEach((cellData, j) => {
+              if (cells[j]) {
+                // Check if cell exists
+                cells[j].textContent = cellData;
+              }
+            });
+          }
+        });
+
+        // Update everything based on the imported data
         updateAscii();
       }
 
@@ -239,103 +432,221 @@
         try {
           const parsed = JSON.parse(jsonOutput.value);
           let data = [];
-          if (Array.isArray(parsed) && parsed.every(r => Array.isArray(r))) {
-            data = parsed;
-          } else if (Array.isArray(parsed) && parsed.every(o => o && typeof o === "object")) {
-            const headers = Array.from(new Set(parsed.flatMap(o => Object.keys(o))));
-            data = [headers].concat(parsed.map(o => headers.map(h => o[h] || "")));
-          } else return;
-          rowsInput.value = data.length;
-          colsInput.value = data[0].length;
+
+          if (Array.isArray(parsed)) {
+            if (parsed.length === 0) {
+              // Handle empty array -> maybe 1x1 empty table? Or reset to default?
+              rowsInput.value = 1;
+              colsInput.value = 1;
+              generateTable();
+              updateAscii();
+              return;
+            }
+
+            // Check if it's an array of arrays (likely)
+            if (parsed.every((item) => Array.isArray(item))) {
+              data = parsed.map((row) => row.map((cell) => String(cell ?? ""))); // Ensure strings
+              if (data.length > 0 && data[0].length === 0) {
+                // Handle array of empty arrays [[],[]]
+                colsInput.value = 1; // Set minimum 1 column
+                data = data.map((r) => [""]); // Give each row one empty cell
+              }
+            }
+            // Check if it's an array of objects (JSON mode)
+            else if (
+              parsed.every(
+                (item) =>
+                  item && typeof item === "object" && !Array.isArray(item)
+              )
+            ) {
+              if (parsed.length === 0) {
+                // Array of objects was empty
+                rowsInput.value = 1; // Header row
+                colsInput.value = 1; // Default column
+                data = [["column_1"]]; // Default header
+              } else {
+                // Get all unique keys from all objects to form headers
+                const headers = Array.from(
+                  new Set(parsed.flatMap((o) => Object.keys(o)))
+                );
+                if (headers.length === 0) {
+                  // Objects had no keys {}
+                  headers.push("column_1"); // Default header
+                  colsInput.value = 1;
+                }
+                // Create the header row
+                data.push(headers);
+                // Create data rows by mapping object values based on headers
+                parsed.forEach((obj) => {
+                  const row = headers.map((header) =>
+                    String(obj[header] ?? "")
+                  ); // Use empty string if key missing
+                  data.push(row);
+                });
+              }
+              jsonModeCheckbox.checked = true; // Assume JSON mode if input was objects
+            } else {
+              // Mixed array or invalid format
+              console.error(
+                "Invalid JSON structure: Array contains mixed types or non-arrays/objects."
+              );
+              alert(
+                "JSON format is not a valid table structure (must be array of arrays or array of objects)."
+              );
+              return;
+            }
+          } else {
+            console.error("Invalid JSON structure: Input is not an array.");
+            alert("Invalid JSON: Input must be an array.");
+            return;
+          }
+
+          // Ensure data consistency (all rows same length)
+          if (data.length > 0) {
+            const expectedCols = data[0].length;
+            data = data.map((row) => {
+              while (row.length < expectedCols) row.push(""); // Pad shorter rows
+              return row.slice(0, expectedCols); // Truncate longer rows
+            });
+            colsInput.value = expectedCols > 0 ? expectedCols : 1; // Handle case of no columns
+          } else {
+            colsInput.value = 1; // Default if no data rows
+          }
+          rowsInput.value = data.length > 0 ? data.length : 1; // Handle case of no rows
+
+          // Regenerate table structure
           generateTable();
-          const tbl = container.querySelector("table");
-          data.forEach((r, i) => r.forEach((c, j) => tbl.rows[i+1].cells[j+1].textContent = c));
+
+          // Populate the table
+          const table = container.querySelector("table");
+          if (!table) return;
+          const tableRows = Array.from(table.rows).slice(1); // Skip ctrl row
+
+          data.forEach((rowData, i) => {
+            if (tableRows[i]) {
+              const cells = Array.from(tableRows[i].cells).slice(1); // Skip ctrl cell
+              rowData.forEach((cellData, j) => {
+                if (cells[j]) {
+                  cells[j].textContent = cellData;
+                }
+              });
+            }
+          });
+
+          // Final update
           updateAscii();
         } catch (e) {
-          // JSON invalide
+          console.error("Invalid JSON:", e);
+          // Optionally provide user feedback, e.g., alert("Invalid JSON input.");
+          // Do not proceed if JSON is invalid
         }
       }
 
-      // Row/Column manipulation functions
+      // --- Row/Column Manipulation Functions (simplified logic thanks to delegation) ---
+
       function addColumn(index) {
+        // index = data column index (0-based)
         const table = container.querySelector("table");
         if (!table) return;
-        const dataRows = Array.from(table.rows).filter(r => !r.classList.contains('control-row'));
-        dataRows.forEach(tr => {
-          const td = document.createElement('td');
+
+        const currentCols = parseInt(colsInput.value);
+
+        // Add control cell in the control row
+        const ctrlRow = table.rows[0];
+        const newCtrlCell = ctrlRow.insertCell(index + 1); // DOM index = data index + 1 (for ctrl cell)
+        newCtrlCell.classList.add("control-cell");
+        newCtrlCell.innerHTML = `
+            <button class="ctrl-btn" title="Add column to the left">+</button>
+            <button class="ctrl-btn" title="Delete this column">-</button>
+          `;
+
+        // Add data cells in each data row
+        const dataRows = Array.from(table.rows).slice(1);
+        dataRows.forEach((tr) => {
+          const td = tr.insertCell(index + 1); // DOM index = data index + 1
           td.contentEditable = true;
-          td.addEventListener('input', updateAscii);
-          tr.insertBefore(td, tr.cells[index+1]);
+          td.addEventListener("input", updateAscii);
+          td.textContent = ""; // Initialize new cell
         });
-        // Update controls row
-        const ctrlRow = table.querySelector('.control-row');
-        const cell = document.createElement('td');
-        cell.classList.add('control-cell');
-        const addBtn = document.createElement("button");
-        addBtn.textContent = "+";
-        addBtn.classList.add('ctrl-btn');
-        addBtn.addEventListener("click", () => addColumn(index));
-        const delBtn = document.createElement("button");
-        delBtn.textContent = "-";
-        delBtn.classList.add('ctrl-btn');
-        delBtn.addEventListener("click", () => removeColumn(index));
-        cell.append(addBtn, delBtn);
-        ctrlRow.insertBefore(cell, ctrlRow.cells[index+1]);
-        colsInput.value = parseInt(colsInput.value) + 1;
+
+        colsInput.value = currentCols + 1;
         updateAscii();
       }
 
       function removeColumn(index) {
+        // index = data column index (0-based)
         const table = container.querySelector("table");
         if (!table) return;
-        const cols = parseInt(colsInput.value);
-        if (cols < 2) return; // at least one column
-        Array.from(table.rows).forEach(tr => {
-          tr.removeChild(tr.cells[index+1]);
+
+        const currentCols = parseInt(colsInput.value);
+        if (currentCols < 2) return; // Keep at least one column
+
+        const domIndex = index + 1; // DOM index = data index + 1
+
+        // Remove cell from each row (including control row)
+        Array.from(table.rows).forEach((tr) => {
+          if (tr.cells.length > domIndex) {
+            // Ensure cell exists before removing
+            tr.deleteCell(domIndex);
+          }
         });
-        colsInput.value = cols - 1;
+
+        colsInput.value = currentCols - 1;
         updateAscii();
       }
 
       function addRow(index) {
+        // index = data row index (0-based) to insert *before*
         const table = container.querySelector("table");
         if (!table) return;
-        const cols = parseInt(colsInput.value);
-        const tr = document.createElement('tr');
-        const ctrlCell = document.createElement('td');
-        ctrlCell.classList.add('control-cell');
-        const addBtn = document.createElement("button");
-        addBtn.textContent = "+";
-        addBtn.classList.add('ctrl-btn');
-        addBtn.addEventListener("click", () => addRow(index));
-        const delBtn = document.createElement("button");
-        delBtn.textContent = "-";
-        delBtn.classList.add('ctrl-btn');
-        delBtn.addEventListener("click", () => removeRow(index));
-        ctrlCell.append(addBtn, delBtn);
-        tr.appendChild(ctrlCell);
-        for (let j = 0; j < cols; j++) {
-          const td = document.createElement('td');
+
+        const currentRows = parseInt(rowsInput.value);
+        const currentCols = parseInt(colsInput.value);
+        const domIndex = index + 1; // DOM index = data index + 1 (for ctrl row)
+
+        // Insert new row at the correct DOM position
+        const tr = table.insertRow(domIndex);
+
+        // Add control cell
+        const ctrlCell = tr.insertCell(0);
+        ctrlCell.classList.add("control-cell");
+        ctrlCell.innerHTML = `
+            <button class="ctrl-btn" title="Add row above">+</button>
+            <button class="ctrl-btn" title="Delete this row">-</button>
+          `;
+
+        // Add data cells
+        for (let j = 0; j < currentCols; j++) {
+          const td = tr.insertCell(j + 1);
           td.contentEditable = true;
-          td.addEventListener('input', updateAscii);
-          tr.appendChild(td);
+          td.addEventListener("input", updateAscii);
+          td.textContent = ""; // Initialize new cell
         }
-        table.insertBefore(tr, table.rows[index+1]);
-        rowsInput.value = parseInt(rowsInput.value) + 1;
+
+        rowsInput.value = currentRows + 1;
         updateAscii();
       }
 
       function removeRow(index) {
+        // index = data row index (0-based)
         const table = container.querySelector("table");
         if (!table) return;
-        const rows = parseInt(rowsInput.value);
-        if (rows < 2) return; // at least one row
-        table.deleteRow(index+1);
-        rowsInput.value = rows - 1;
+
+        const currentRows = parseInt(rowsInput.value);
+        if (currentRows < 2) return; // Keep at least one row
+
+        const domIndex = index + 1; // DOM index = data index + 1
+
+        if (table.rows.length > domIndex) {
+          // Ensure row exists
+          table.deleteRow(domIndex);
+        }
+
+        rowsInput.value = currentRows - 1;
         updateAscii();
       }
 
-      // Initial render
+      // --- Initial Render ---
       generateTable();
     </script>
   </body>

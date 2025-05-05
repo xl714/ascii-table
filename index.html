@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Générateur de tableau ASCII</title>
+    <style>
+      body {
+        font-family: "Courier New", Courier, monospace;
+        margin: 20px;
+      }
+      input[type="number"],
+      input[type="checkbox"],
+      button {
+        font-family: "Courier New", Courier, monospace;
+      }
+      input[type="number"] {
+        width: 60px;
+        margin-right: 10px;
+      }
+      label {
+        margin-right: 15px;
+      }
+      table {
+        border-collapse: collapse;
+        margin-top: 20px;
+        font-family: "Courier New", Courier, monospace;
+      }
+      table td {
+        border: 1px solid #ccc;
+        padding: 5px;
+        min-width: 20px;
+      }
+      #ascii-output {
+        white-space: pre;
+        margin-top: 20px;
+        background: #f9f9f9;
+        padding: 10px;
+        border: 1px solid #ccc;
+        font-family: "Courier New", Courier, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ASCII TABLE</h1>
+    <label
+      >Lines number: <input type="number" id="rows" min="1" value="3"
+    /></label>
+    <label
+      >Columns number: <input type="number" id="cols" min="1" value="3"
+    /></label>
+    <label
+      ><input type="checkbox" id="sepAll" checked /> Separate each line</label
+    >
+
+    <div id="table-container"></div>
+    <div id="ascii-output"></div>
+
+    <script>
+      const rowsInput = document.getElementById("rows");
+      const colsInput = document.getElementById("cols");
+      const sepAllCheckbox = document.getElementById("sepAll");
+      const container = document.getElementById("table-container");
+      const asciiOutput = document.getElementById("ascii-output");
+
+      rowsInput.addEventListener("input", generateTable);
+      colsInput.addEventListener("input", generateTable);
+      sepAllCheckbox.addEventListener("change", updateAscii);
+
+      function generateTable() {
+        const rows = Math.max(1, parseInt(rowsInput.value) || 1);
+        const cols = Math.max(1, parseInt(colsInput.value) || 1);
+        container.innerHTML = "";
+
+        const table = document.createElement("table");
+        for (let i = 0; i < rows; i++) {
+          const tr = document.createElement("tr");
+          for (let j = 0; j < cols; j++) {
+            const td = document.createElement("td");
+            td.contentEditable = true;
+            td.addEventListener("input", updateAscii);
+            tr.appendChild(td);
+          }
+          table.appendChild(tr);
+        }
+        container.appendChild(table);
+        updateAscii();
+      }
+
+      function updateAscii() {
+        const table = container.querySelector("table");
+        if (!table) return;
+        const data = [];
+        table.querySelectorAll("tr").forEach((tr) => {
+          const row = [];
+          tr.querySelectorAll("td").forEach((td) =>
+            row.push(td.textContent.trim())
+          );
+          data.push(row);
+        });
+        const colWidths = data[0].map((_, ci) => {
+          let max = 0;
+          data.forEach((r) => {
+            if (r[ci].length > max) max = r[ci].length;
+          });
+          return max + 2;
+        });
+        const makeBorder = () =>
+          "+" + colWidths.map((w) => "-".repeat(w)).join("+") + "+\n";
+        const makeRow = (row) =>
+          "|" +
+          row
+            .map(
+              (cell, j) =>
+                " " + cell + " ".repeat(colWidths[j] - cell.length - 1)
+            )
+            .join("|") +
+          "|\n";
+
+        let ascii = "";
+        const topBorder = makeBorder();
+        ascii += topBorder;
+        // Header row
+        ascii += makeRow(data[0]);
+        // Separator after header
+        ascii += makeBorder();
+        if (sepAllCheckbox.checked) {
+          // Separate every line
+          for (let i = 1; i < data.length; i++) {
+            ascii += makeRow(data[i]);
+            ascii += makeBorder();
+          }
+        } else {
+          // Only rows without separators, then bottom border
+          for (let i = 1; i < data.length; i++) {
+            ascii += makeRow(data[i]);
+          }
+          ascii += topBorder;
+        }
+        asciiOutput.textContent = ascii;
+      }
+
+      // Initialisation
+      generateTable();
+    </script>
+  </body>
+</html>

@@ -44,7 +44,7 @@
   <body>
     <h1>ASCII table manager</h1>
     <p>
-      Créate/generate or copy-paste an existing ASCII table to edit it easily
+      Create/generate or copy-paste an existing ASCII table to edit it easily
     </p>
     <label>Lines: <input type="number" id="rows" min="1" value="3" /></label>
     <label>Columns: <input type="number" id="cols" min="1" value="3" /></label>
@@ -53,8 +53,10 @@
       ><input type="checkbox" id="sepAll" checked /> Separate each line</label
     >
     &nbsp;&nbsp;&nbsp;
-    <label
-      >Font:
+    <label><input type="checkbox" id="jsonMode" /> JSON</label>
+    &nbsp;&nbsp;&nbsp;
+    <label>
+      Font:
       <select id="fontSelect">
         <option value="Consolas, monospace" selected>Consolas</option>
         <option value="'Courier New', Courier, monospace">Courier New</option>
@@ -75,14 +77,9 @@
       id="ascii-output"
       placeholder="Le tableau ASCII apparaît ici..."
     ></textarea>
-    <!-- JSON export/import area -->
-    <textarea
-      id="json-output"
-      placeholder="Le tableau JSON apparaît ici..."
-    ></textarea>
+    <textarea id="json-output" placeholder="JSON export/import..."></textarea>
 
     <script>
-      // Calcule la largeur d'affichage en monospace en tenant compte des emojis
       const emojiRegex = /\p{Extended_Pictographic}/u;
       function stringWidth(str) {
         return [...str].reduce((w, ch) => w + (emojiRegex.test(ch) ? 2 : 1), 0);
@@ -91,6 +88,7 @@
       const rowsInput = document.getElementById("rows");
       const colsInput = document.getElementById("cols");
       const sepAllCheckbox = document.getElementById("sepAll");
+      const jsonModeCheckbox = document.getElementById("jsonMode");
       const fontSelect = document.getElementById("fontSelect");
       const container = document.getElementById("table-container");
       const asciiOutput = document.getElementById("ascii-output");
@@ -99,23 +97,23 @@
       rowsInput.addEventListener("input", generateTable);
       colsInput.addEventListener("input", generateTable);
       sepAllCheckbox.addEventListener("change", updateAscii);
+      jsonModeCheckbox.addEventListener("change", () => updateJSON(getData()));
       asciiOutput.addEventListener("input", importAscii);
+      jsonOutput.addEventListener("input", importJSON);
       fontSelect.addEventListener("change", () => {
         container
           .querySelectorAll("table, textarea")
           .forEach((el) => (el.style.fontFamily = fontSelect.value));
         updateAscii();
       });
-      jsonOutput.addEventListener("input", importJSON);
 
       function generateTable() {
         const oldTable = container.querySelector("table");
         let oldData = [];
-        if (oldTable) {
+        if (oldTable)
           oldData = Array.from(oldTable.rows).map((tr) =>
             Array.from(tr.cells).map((td) => td.textContent.trim())
           );
-        }
         const rows = Math.max(1, parseInt(rowsInput.value) || 1);
         const cols = Math.max(1, parseInt(colsInput.value) || 1);
         container.innerHTML = "";
@@ -127,118 +125,120 @@
             const td = document.createElement("td");
             td.contentEditable = true;
             td.addEventListener("input", updateAscii);
-            if (oldData[i] && oldData[i][j] !== undefined) {
+            if (oldData[i] && oldData[i][j] !== undefined)
               td.textContent = oldData[i][j];
-            }
             tr.appendChild(td);
           }
           table.appendChild(tr);
         }
         container.appendChild(table);
-        asciiOutput.style.fontFamily = fontSelect.value;
         updateAscii();
       }
 
-      function updateAscii() {
+      function getData() {
         const table = container.querySelector("table");
-        if (!table) return;
-        const data = Array.from(table.rows).map((tr) =>
+        if (!table) return [];
+        return Array.from(table.rows).map((tr) =>
           Array.from(tr.cells).map((td) => td.textContent.trim())
         );
-        const colWidths = data[0].map((_, ci) => {
-          let max = 0;
-          data.forEach((r) => {
-            const w = stringWidth(r[ci]);
-            if (w > max) max = w;
-          });
-          return max + 2;
-        });
-        const makeBorder = () =>
+      }
+
+      function updateAscii() {
+        const data = getData();
+        if (!data.length) return;
+        const colWidths = data[0].map(
+          (_, ci) => Math.max(...data.map((r) => stringWidth(r[ci]))) + 2
+        );
+        const border = () =>
           "+" + colWidths.map((w) => "-".repeat(w)).join("+") + "+\n";
-        const makeRow = (row) =>
+        const rowLine = (row) =>
           "|" +
           row
             .map((cell, j) => {
-              const cellW = stringWidth(cell);
-              return " " + cell + " ".repeat(colWidths[j] - cellW - 1);
+              const w = stringWidth(cell);
+              return " " + cell + " ".repeat(colWidths[j] - w - 1);
             })
             .join("|") +
           "|\n";
 
-        let ascii = "";
-        const topBorder = makeBorder();
-        ascii += topBorder;
-        ascii += makeRow(data[0]);
-        ascii += topBorder;
-        if (sepAllCheckbox.checked) {
-          for (let i = 1; i < data.length; i++) {
-            ascii += makeRow(data[i]);
-            ascii += topBorder;
-          }
-        } else {
-          for (let i = 1; i < data.length; i++) {
-            ascii += makeRow(data[i]);
-          }
-          ascii += topBorder;
+        let ascii = border() + rowLine(data[0]) + border();
+        if (sepAllCheckbox.checked)
+          data.slice(1).forEach((r) => (ascii += rowLine(r) + border()));
+        else {
+          data.slice(1).forEach((r) => (ascii += rowLine(r)));
+          ascii += border();
         }
         asciiOutput.value = ascii;
         updateJSON(data);
       }
 
       function updateJSON(data) {
-        jsonOutput.value = JSON.stringify(data);
+        if (jsonModeCheckbox.checked && data.length > 1) {
+          const headers = data[0];
+          const objects = data
+            .slice(1)
+            .map((row) =>
+              headers.reduce((o, k, i) => ((o[k] = row[i]), o), {})
+            );
+          jsonOutput.value = JSON.stringify(objects, null, 2);
+        } else {
+          jsonOutput.value = JSON.stringify(data, null, 2);
+        }
       }
 
       function importAscii() {
-        const text = asciiOutput.value.trim();
-        const lines = text.split("\n").filter((l) => l);
+        const txt = asciiOutput.value.trim();
+        const lines = txt.split("\n").filter((l) => l);
         if (!lines.length) return;
-        const borderLines = lines.filter((l) => /^\+[\-+]+\+$/.test(l));
         const rowLines = lines.filter((l) => /^\|.*\|$/.test(l));
-        if (!borderLines.length || !rowLines.length) return;
-        const cols = borderLines[0].slice(1, -1).split("+").length;
         const data = rowLines.map((l) =>
           l
             .slice(1, -1)
             .split("|")
-            .map((cell) => cell.trim())
+            .map((c) => c.trim())
         );
         rowsInput.value = data.length;
-        colsInput.value = cols;
-        sepAllCheckbox.checked = borderLines.length > data.length + 1;
+        colsInput.value = data[0].length;
+        sepAllCheckbox.checked =
+          lines.filter((l) => /^\+[\-+]+\+$/.test(l)).length > data.length + 1;
         generateTable();
-        const table = container.querySelector("table");
-        data.forEach((row, i) =>
-          row.forEach((cell, j) => {
-            if (table.rows[i] && table.rows[i].cells[j])
-              table.rows[i].cells[j].textContent = cell;
-          })
+        const tbl = container.querySelector("table");
+        data.forEach((r, i) =>
+          r.forEach((c, j) => (tbl.rows[i].cells[j].textContent = c))
         );
         updateAscii();
       }
 
       function importJSON() {
         try {
-          const data = JSON.parse(jsonOutput.value);
-          if (Array.isArray(data) && data.every((r) => Array.isArray(r))) {
-            rowsInput.value = data.length;
-            colsInput.value = data[0].length;
-            generateTable();
-            const table = container.querySelector("table");
-            data.forEach((row, i) =>
-              row.forEach((cell, j) => {
-                if (table.rows[i] && table.rows[i].cells[j])
-                  table.rows[i].cells[j].textContent = cell;
-              })
+          const parsed = JSON.parse(jsonOutput.value);
+          let data = [];
+          if (Array.isArray(parsed) && parsed.every((r) => Array.isArray(r))) {
+            data = parsed;
+          } else if (
+            Array.isArray(parsed) &&
+            parsed.every((o) => o && typeof o === "object" && !Array.isArray(o))
+          ) {
+            const headers = Array.from(
+              new Set(parsed.flatMap((o) => Object.keys(o)))
             );
-            updateAscii();
-          }
+            data = [headers].concat(
+              parsed.map((o) => headers.map((h) => o[h] || ""))
+            );
+          } else return;
+          rowsInput.value = data.length;
+          colsInput.value = data[0].length;
+          generateTable();
+          const tbl = container.querySelector("table");
+          data.forEach((r, i) =>
+            r.forEach((c, j) => (tbl.rows[i].cells[j].textContent = c))
+          );
+          updateAscii();
         } catch (e) {
-          // Invalid JSON, ignore
+          // JSON invalide, rien
         }
       }
 
-      // Initialisation
       generateTable();
     </script>
   </body>

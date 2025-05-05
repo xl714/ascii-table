@@ -43,14 +43,16 @@
   </head>
   <body>
     <h1>ASCII table manager</h1>
-    <p>Créate/generate or copy-paste an existing ASCII table to edit it finger in the nose</p>
-    <label>Lignes: <input type="number" id="rows" min="1" value="3" /></label>
-    <label>Colonnes: <input type="number" id="cols" min="1" value="3" /></label>
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <p>
+      Créate/generate or copy-paste an existing ASCII table to edit it easily
+    </p>
+    <label>Lines: <input type="number" id="rows" min="1" value="3" /></label>
+    <label>Columns: <input type="number" id="cols" min="1" value="3" /></label>
+    &nbsp;&nbsp;&nbsp;
     <label
       ><input type="checkbox" id="sepAll" checked /> Separate each line</label
     >
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    &nbsp;&nbsp;&nbsp;
     <label
       >Font:
       <select id="fontSelect">
@@ -69,7 +71,15 @@
     </label>
 
     <div id="table-container"></div>
-    <textarea id="ascii-output"></textarea>
+    <textarea
+      id="ascii-output"
+      placeholder="Le tableau ASCII apparaît ici..."
+    ></textarea>
+    <!-- JSON export/import area -->
+    <textarea
+      id="json-output"
+      placeholder="Le tableau JSON apparaît ici..."
+    ></textarea>
 
     <script>
       // Calcule la largeur d'affichage en monospace en tenant compte des emojis
@@ -84,19 +94,28 @@
       const fontSelect = document.getElementById("fontSelect");
       const container = document.getElementById("table-container");
       const asciiOutput = document.getElementById("ascii-output");
+      const jsonOutput = document.getElementById("json-output");
 
       rowsInput.addEventListener("input", generateTable);
       colsInput.addEventListener("input", generateTable);
       sepAllCheckbox.addEventListener("change", updateAscii);
       asciiOutput.addEventListener("input", importAscii);
       fontSelect.addEventListener("change", () => {
-        asciiOutput.style.fontFamily = fontSelect.value;
-        container.style.fontFamily = fontSelect.value;
-        const tbl = container.querySelector("table");
-        if (tbl) tbl.style.fontFamily = fontSelect.value;
+        container
+          .querySelectorAll("table, textarea")
+          .forEach((el) => (el.style.fontFamily = fontSelect.value));
+        updateAscii();
       });
+      jsonOutput.addEventListener("input", importJSON);
 
       function generateTable() {
+        const oldTable = container.querySelector("table");
+        let oldData = [];
+        if (oldTable) {
+          oldData = Array.from(oldTable.rows).map((tr) =>
+            Array.from(tr.cells).map((td) => td.textContent.trim())
+          );
+        }
         const rows = Math.max(1, parseInt(rowsInput.value) || 1);
         const cols = Math.max(1, parseInt(colsInput.value) || 1);
         container.innerHTML = "";
@@ -108,6 +127,9 @@
             const td = document.createElement("td");
             td.contentEditable = true;
             td.addEventListener("input", updateAscii);
+            if (oldData[i] && oldData[i][j] !== undefined) {
+              td.textContent = oldData[i][j];
+            }
             tr.appendChild(td);
           }
           table.appendChild(tr);
@@ -147,11 +169,11 @@
         const topBorder = makeBorder();
         ascii += topBorder;
         ascii += makeRow(data[0]);
-        ascii += makeBorder();
+        ascii += topBorder;
         if (sepAllCheckbox.checked) {
           for (let i = 1; i < data.length; i++) {
             ascii += makeRow(data[i]);
-            ascii += makeBorder();
+            ascii += topBorder;
           }
         } else {
           for (let i = 1; i < data.length; i++) {
@@ -160,6 +182,11 @@
           ascii += topBorder;
         }
         asciiOutput.value = ascii;
+        updateJSON(data);
+      }
+
+      function updateJSON(data) {
+        jsonOutput.value = JSON.stringify(data);
       }
 
       function importAscii() {
@@ -176,10 +203,9 @@
             .split("|")
             .map((cell) => cell.trim())
         );
-        const rows = data.length;
-        rowsInput.value = rows;
+        rowsInput.value = data.length;
         colsInput.value = cols;
-        sepAllCheckbox.checked = borderLines.length > rows + 1;
+        sepAllCheckbox.checked = borderLines.length > data.length + 1;
         generateTable();
         const table = container.querySelector("table");
         data.forEach((row, i) =>
@@ -189,6 +215,27 @@
           })
         );
         updateAscii();
+      }
+
+      function importJSON() {
+        try {
+          const data = JSON.parse(jsonOutput.value);
+          if (Array.isArray(data) && data.every((r) => Array.isArray(r))) {
+            rowsInput.value = data.length;
+            colsInput.value = data[0].length;
+            generateTable();
+            const table = container.querySelector("table");
+            data.forEach((row, i) =>
+              row.forEach((cell, j) => {
+                if (table.rows[i] && table.rows[i].cells[j])
+                  table.rows[i].cells[j].textContent = cell;
+              })
+            );
+            updateAscii();
+          }
+        } catch (e) {
+          // Invalid JSON, ignore
+        }
       }
 
       // Initialisation
